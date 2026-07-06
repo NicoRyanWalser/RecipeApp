@@ -1,0 +1,55 @@
+# ============================================================================
+#  Docker Compose — runs a PostgreSQL database in a container so you don't have
+#  to install Postgres directly on your machine.
+#
+#  Start it from the "server" folder with:   docker compose up -d
+#    (-d means "detached" / in the background)
+#  Stop it with:                             docker compose down
+#  Stop it AND delete the data:              docker compose down -v
+#
+#  Spring Boot connects to this database using the settings in
+#  application.properties. The database name, user, and password below MUST match
+#  what's configured there.
+# ============================================================================
+
+services:
+  # "db" is just the name we give this service inside Compose.
+  db:
+    # The official PostgreSQL image, version 16, from Docker Hub. Docker downloads
+    # it automatically the first time you run "docker compose up".
+    image: postgres:16
+
+    # A friendly, fixed name for the running container (otherwise Docker
+    # auto-generates one).
+    container_name: recipe-postgres
+
+    # These environment variables are read by the postgres image on first startup
+    # to create the initial database and login credentials.
+    environment:
+      POSTGRES_DB: recipedb
+      POSTGRES_USER: recipe
+      POSTGRES_PASSWORD: recipe
+
+    # Port mapping "host:container". This exposes the container's internal Postgres
+    # port (5432) on your machine's port 5432, so the Spring app (running outside
+    # Docker) can reach it at localhost:5432.
+    ports:
+      - "5432:5432"
+
+    # A named volume persists the database files. Without this, all your recipes
+    # would vanish every time the container is removed. With it, the data survives
+    # "docker compose down" (but not "down -v", which deletes the volume too).
+    volumes:
+      - recipe_pgdata:/var/lib/postgresql/data
+
+    # A healthcheck lets Docker know when Postgres is actually ready to accept
+    # connections (the container starting is not the same as the DB being ready).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recipe -d recipedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+# Declares the named volume used above.
+volumes:
+  recipe_pgdata:
