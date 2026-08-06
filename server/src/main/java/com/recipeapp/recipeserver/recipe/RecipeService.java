@@ -1,8 +1,18 @@
 package com.recipeapp.recipeserver.recipe;
 
+import com.recipeapp.recipeserver.common.NotFoundException;
+import com.recipeapp.recipeserver.ingredient.Ingredient;
+import com.recipeapp.recipeserver.ingredient.IngredientRepository;
+import com.recipeapp.recipeserver.recipe.dto.RecipeDetailResponse;
+import com.recipeapp.recipeserver.recipe.dto.RecipeIngredientRequest;
 import com.recipeapp.recipeserver.recipe.dto.RecipeRequest;
-import com.recipeapp.recipeserver.recipe.dto.RecipeResponse;
+import com.recipeapp.recipeserver.recipe.dto.RecipeSummaryResponse;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,61 +20,163 @@ import org.springframework.transaction.annotation.Transactional;
  * The "service" layer holds the business logic and sits BETWEEN the controller
  * (which handles HTTP) and the repository (which handles the database).
  *
- * Why have a separate layer at all for such simple logic? It's a convention that
- * keeps responsibilities clean:
+ * Why have a separate layer at all? It's a convention that keeps responsibilities
+ * clean:
  *   - Controller  = "what does the web look like?" (URLs, status codes, JSON)
  *   - Service     = "what are the business rules?" (validation orchestration,
  *                    transactions, converting entities <-> DTOs)
  *   - Repository  = "how do we talk to the database?"
- * As the app grows, this separation is what keeps it maintainable.
+ *
+ * That separation earns its keep here in a way it didn't when a recipe was three
+ * strings: creating one now means resolving ingredient ids against the catalog,
+ * building child entities, assigning positions, and doing it all inside a single
+ * transaction so a half-written recipe can never exist.
  */
-// @Service marks this class as a Spring-managed "bean". At startup Spring creates
-// ONE shared instance and makes it available to be injected wherever it's needed
-// (here, into the controller). This is "Dependency Injection" — you never write
-// "new RecipeService()" yourself; the framework builds and wires objects for you.
 @Service
 public class RecipeService {
 
-    // The service needs the repository to reach the database. We store it as a
-    // "final" field so it can never be reassigned after construction.
     private final RecipeRepository recipeRepository;
 
-    // "Constructor injection": Spring sees this constructor needs a
-    // RecipeRepository, finds the one it auto-generated (see RecipeRepository),
-    // and passes it in automatically. This is the recommended DI style because it
-    // makes dependencies explicit and the object impossible to build half-wired.
-    public RecipeService(RecipeRepository recipeRepository) {
+    // The recipe service needs the ingredient catalog, because a request arrives
+    // carrying ingredient IDs and those must be turned into real Ingredient entities
+    // before a line can be built.
+    private final IngredientRepository ingredientRepository;
+
+    public RecipeService(RecipeRepository recipeRepository, IngredientRepository ingredientRepository) {
         this.recipeRepository = recipeRepository;
+        this.ingredientRepository = ingredientRepository;
     }
 
-    // @Transactional wraps this method in a database transaction. readOnly = true
-    // is a hint that we're only reading (no writes), which lets the database and
-    // Hibernate optimize. If anything threw mid-method, the transaction would roll
-    // back cleanly.
+    /**
+     * The list view. Returns lightweight summaries — see RecipeSummaryResponse for
+     * why this deliberately does not return full recipes.
+     */
     @Transactional(readOnly = true)
-    public List<RecipeResponse> findAll() {
-        // 1. Ask the repository for all recipes, newest first (our derived query).
-        // 2. Turn the list into a "stream" so we can transform each element.
-        // 3. map(...) converts every Recipe ENTITY into a Recipe RESPONSE DTO,
-        //    so we never expose raw entities to the web layer.
-        // 4. toList() collects the transformed items back into a List.
-        return recipeRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(RecipeResponse::from)
-                .toList();
+    public List<RecipeSummaryResponse> findAll() {
+        // No .stream().map(...) here: the projection query builds the DTOs itself,
+        // inside the database. There is nothing left to convert.
+        return recipeRepository.findAllSummaries();
     }
 
-    // No readOnly here because this method WRITES to the database. The whole method
-    // runs inside one transaction: if save() failed, nothing would be committed.
-    @Transactional
-    public RecipeResponse create(RecipeRequest request) {
-        // Convert the incoming request DTO into a real Recipe entity. Note the
-        // client's data (name/ingredients/instructions) is used, while id and
-        // createdAt are handled by the entity/database — the client can't spoof them.
-        Recipe recipe = new Recipe(request.name(), request.ingredients(), request.instructions());
+    @Transactional(readOnly = true)
+    public RecipeDetailResponse findById(Long id) {
+        Recipe recipe = loadOrThrow(id);
+        // The mapping happens HERE, inside the transaction, because the recipe's
+        // ingredients and steps are lazy collections. See RecipeDetailResponse.from
+        // for the full explanation of why that placement is not optional.
+        return RecipeDetailResponse.from(recipe);
+    }
 
-        // save() INSERTs the row and returns the SAME entity now populated with the
-        // database-generated id (and the createdAt we set). We immediately convert
-        // that saved entity into a response DTO to hand back to the controller.
-        return RecipeResponse.from(recipeRepository.save(recipe));
+    @Transactional
+    public RecipeDetailResponse create(RecipeRequest request) {
+        // 1. Build the parent row from the fields the client is allowed to set. Note
+        //    the client's data is used, while id, createdAt and updatedAt are handled
+        //    by the entity and database — the client can't spoof them.
+        Recipe recipe = new Recipe(request.name(), request.description(), request.servings());
+
+        // 2. Turn the submitted ingredient lines into real child entities, which
+        //    includes checking that every referenced ingredient actually exists.
+        // 3. Attach children to the parent. This is what assigns positions and sets
+        //    each line's back-reference to the recipe.
+        recipe.setInitialContent(buildLines(request), List.copyOf(request.steps()));
+
+        // 4. One save() writes the recipe AND all of its children, because the
+        //    @OneToMany is declared with cascade = ALL. Without that cascade we would
+        //    have to save every line individually and in the right order.
+        return RecipeDetailResponse.from(recipeRepository.save(recipe));
+    }
+
+    @Transactional
+    public RecipeDetailResponse update(Long id, RecipeRequest request) {
+        Recipe recipe = loadOrThrow(id);
+
+        // applyChanges is the recipe's single named mutator — see Recipe.applyChanges
+        // for why this is one method rather than a handful of setters. It replaces the
+        // child collections in place, which is what makes orphanRemoval delete the
+        // lines the user removed.
+        recipe.applyChanges(
+                request.name(),
+                request.description(),
+                request.servings(),
+                buildLines(request),
+                List.copyOf(request.steps()));
+
+        // No explicit save() call is needed and this is worth understanding rather
+        // than memorizing. Inside a transaction, an entity loaded from the database is
+        // MANAGED: Hibernate holds a snapshot of it and, at commit time, compares the
+        // current state against that snapshot and issues UPDATE/INSERT/DELETE for
+        // whatever differs. This is called "dirty checking". Calling save() here would
+        // be harmless but redundant.
+        //
+        // The flip side, and the reason people find this confusing: it means you can
+        // accidentally persist a change you only meant to make in memory. Mutating a
+        // managed entity inside a transaction always hits the database.
+        return RecipeDetailResponse.from(recipe);
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        // existsById first, so deleting a recipe that isn't there produces a clean 404
+        // rather than silently succeeding. deleteById is a no-op for a missing row,
+        // which would tell the user "deleted!" about something that never existed.
+        if (!recipeRepository.existsById(id)) {
+            throw NotFoundException.of("Recipe", id);
+        }
+        // The child rows go too, via cascade = ALL plus orphanRemoval. Without those,
+        // this would fail on a foreign key violation: you cannot delete a parent row
+        // while children still point at it.
+        recipeRepository.deleteById(id);
+    }
+
+    private Recipe loadOrThrow(Long id) {
+        return recipeRepository.findById(id)
+                .orElseThrow(() -> NotFoundException.of("Recipe", id));
+    }
+
+    /**
+     * Converts the submitted ingredient lines into RecipeIngredient entities.
+     *
+     * The interesting part is how the ingredient IDs get resolved. The naive version
+     * calls ingredientRepository.findById(...) inside the loop — one query per line,
+     * which is the N+1 problem yet again, this time on a write path. Instead we
+     * collect every id first and fetch them in a single findAllById.
+     *
+     * Recognizing this shape is most of the skill: any time a loop body performs a
+     * lookup, ask whether the whole set can be fetched once before the loop.
+     */
+    private List<RecipeIngredient> buildLines(RecipeRequest request) {
+        // 1. Gather the distinct ingredient ids the request refers to. A LinkedHashSet
+        //    de-duplicates (a recipe legitimately might list "Olive Oil" twice, for
+        //    the pan and for drizzling) while preserving order for a stable error
+        //    message if one is missing.
+        Set<Long> requestedIds = request.ingredients().stream()
+                .map(RecipeIngredientRequest::ingredientId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        // 2. One query for all of them, indexed by id so the loop below is a cheap
+        //    map lookup rather than a database round trip.
+        Map<Long, Ingredient> byId = ingredientRepository.findAllById(requestedIds).stream()
+                .collect(Collectors.toMap(Ingredient::getId, Function.identity()));
+
+        // 3. Fail loudly if the client referenced an ingredient that doesn't exist.
+        //    Doing this BEFORE building anything means we never half-construct a
+        //    recipe and then abandon it. The message names the offending id, because
+        //    "not found" without saying what is a frustrating error to receive.
+        for (Long requestedId : requestedIds) {
+            if (!byId.containsKey(requestedId)) {
+                throw NotFoundException.of("Ingredient", requestedId);
+            }
+        }
+
+        // 4. Build one line per submitted entry, in the order they were sent. The
+        //    position is NOT set here — Recipe.replaceIngredients assigns it from the
+        //    list index, so ordering lives in exactly one place.
+        return request.ingredients().stream()
+                .map(line -> new RecipeIngredient(
+                        byId.get(line.ingredientId()),
+                        line.quantity(),
+                        line.unit(),
+                        line.note()))
+                .toList();
     }
 }

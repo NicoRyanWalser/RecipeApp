@@ -1,184 +1,596 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
+/* ==========================================================================
+   RecipeApp styles.
 
-  &:hover {
-    border-color: var(--accent-border);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
+   Everything below uses ONLY the custom properties declared in index.css
+   (--text, --bg, --border, --accent, --shadow, ...). That is not a stylistic
+   preference — it is why dark mode needs no work in this file. index.css already
+   has a @media (prefers-color-scheme: dark) block that swaps those variables, so
+   every rule here follows automatically. Hardcode a single "color: #fff" and it
+   becomes the one thing that breaks in dark mode.
+
+   The previous contents of this file were the Vite starter's demo styles
+   (.hero, #next-steps, #docs, .counter, .ticks) and have been removed — nothing
+   in the app referenced them any more.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Layout
+   -------------------------------------------------------------------------- */
+
+/* #root in index.css sets text-align: center, which is right for a landing page
+   and wrong for a form. Overriding it here — rather than editing index.css —
+   keeps the shared design tokens file untouched and the override visible next to
+   the code that needs it. */
+.app-header,
+.app-main {
+  text-align: left;
+  padding-inline: 32px;
 }
 
-.hero {
-  position: relative;
-
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
-
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
+.app-header {
+  padding-block: 24px 8px;
 }
 
-#center {
+.app-main {
   display: flex;
   flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
+  gap: 32px;
+  padding-block: 24px 64px;
+}
 
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
+@media (max-width: 768px) {
+  .app-header,
+  .app-main {
+    padding-inline: 16px;
   }
 }
 
-#next-steps {
+/* --------------------------------------------------------------------------
+   Shared primitives
+   -------------------------------------------------------------------------- */
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.muted {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.empty-state {
+  text-align: center;
+  padding-block: 32px;
+}
+
+.panel-header {
   display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
-
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
-
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
-#docs {
-  border-right: 1px solid var(--border);
-
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
+.panel-header h2 {
+  margin: 0;
 }
 
-#next-steps ul {
-  list-style: none;
-  padding: 0;
+.panel-header-actions {
   display: flex;
   gap: 8px;
-  margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
 }
 
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
+/* Visually hidden, but still read by screen readers.
+   This is the standard "sr-only" recipe. Note what it does NOT use:
+   display:none and visibility:hidden both remove the element from the
+   accessibility tree entirely, which defeats the purpose. Clipping it to a
+   1px box is the technique that keeps it announced while taking no space. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-.ticks {
-  position: relative;
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  /* One of the few deliberate hardcoded colours: this text sits on the accent
+     purple in BOTH themes, so it must stay light in both. Using var(--text)
+     here would make it dark-on-purple in light mode. */
+  color: #fff;
+  font-weight: 500;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.btn-ghost {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--accent-border);
+}
+
+.btn-small {
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.btn-danger {
+  /* Kept token-driven rather than a red literal so it stays legible in dark mode.
+     The colour reads as "not the primary action"; the confirm dialog does the
+     real work of preventing an accident. */
+  color: var(--text-h);
+  background: transparent;
+  border-color: var(--border);
+}
+
+.btn-icon {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+  padding: 4px 10px;
+  line-height: 1;
+}
+
+.btn-icon:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* A single global focus ring, so EVERY interactive element gets one.
+   :focus-visible rather than :focus is the important detail — it shows the ring
+   for keyboard navigation but not for mouse clicks, which is what people
+   actually want and why so many sites wrongly remove focus rings altogether. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Form fields
+   -------------------------------------------------------------------------- */
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
   width: 100%;
+  /* Without border-box, the padding and border are ADDED to the declared width,
+     so a 100%-wide input overflows its container by ~22px. This is the single
+     most common layout surprise in CSS. */
+  box-sizing: border-box;
+}
 
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
-  }
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
 
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.field-optional {
+  font-weight: 400;
+  color: var(--text);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 16px;
+}
+
+.field-error {
+  color: var(--accent);
+  font-size: 14px;
+  margin: 0;
+}
+
+.form-error {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0;
+}
+
+.recipe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.recipe-form h2 {
+  margin: 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Dynamic ingredient / step rows
+   -------------------------------------------------------------------------- */
+
+.rows-fieldset {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 0;
+}
+
+.rows-fieldset legend {
+  font-weight: 500;
+  color: var(--text-h);
+  padding-inline: 6px;
+}
+
+.rows {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The ingredient row's column layout: combobox, quantity, unit, note, remove.
+   Named grid columns would be nicer still, but explicit tracks keep the widths
+   obvious at a glance. */
+.row-main {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) 90px 100px minmax(120px, 1.5fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+/* Steps are one wide textarea plus a button cluster, so they override the grid. */
+.row:has(.row-step) .row-main {
+  grid-template-columns: 1fr auto;
+}
+
+.row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.row-step {
+  resize: vertical;
+}
+
+/* Below ~700px the five-column row stops being readable, so it stacks. */
+@media (max-width: 700px) {
+  .row-main {
+    grid-template-columns: 1fr;
   }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
+}
+
+/* The "no conversion data" warning under a row, and the "listed separately"
+   note on the shopping list. Both explain a surprise before it happens. */
+.row-hint {
+  font-size: 13px;
+  color: var(--text);
+  margin: 4px 0 0;
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
+   Combobox
+   -------------------------------------------------------------------------- */
+
+.combobox {
+  /* position: relative makes this the positioning context for the absolutely
+     positioned dropdown below, so the list appears under THIS input rather than
+     in the corner of the page. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.combobox-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.combobox-list {
+  /* Taken out of the document flow so the dropdown floats over the content below
+     instead of pushing every following row down as you type. */
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  /* z-index lifts it above adjacent rows; without it the next row's input can
+     paint on top of the list. */
+  z-index: 10;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.combobox-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* The HIGHLIGHTED option — the one aria-activedescendant points at.
+   Styled from the is-highlighted class rather than :hover, because the highlight
+   moves with the ARROW KEYS as well as the mouse. A :hover-only style would
+   leave keyboard users with no visible indication of where they are. */
+.combobox-option.is-highlighted {
+  background: var(--accent-bg);
+}
+
+.combobox-option-name {
+  color: var(--text-h);
+}
+
+.combobox-option-meta {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.combobox-create {
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.combobox-status {
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* The chosen ingredient, shown as a removable chip below the input. */
+.combobox-selection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  padding: 2px 6px 2px 10px;
+  font-size: 14px;
+}
+
+.combobox-clear {
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Recipe list
+   -------------------------------------------------------------------------- */
+
+.list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recipe-card {
+  padding: 16px 20px;
+}
+
+/* Selected rows get an accent border, so the set feeding the shopping list is
+   obvious without reading every checkbox. */
+.recipe-card.is-selected {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.recipe-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.recipe-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+/* The checkbox must not stretch to the 100% width set on inputs above. */
+.recipe-select input[type='checkbox'],
+.shopping-item input[type='checkbox'] {
+  width: auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.recipe-name {
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.recipe-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recipe-meta {
+  font-size: 14px;
+}
+
+/* --------------------------------------------------------------------------
+   Recipe detail
+   -------------------------------------------------------------------------- */
+
+.recipe-detail {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 32px;
+}
+
+@media (max-width: 700px) {
+  .recipe-detail {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
+}
+
+.recipe-detail h4 {
+  margin: 0 0 8px;
+  color: var(--text-h);
+}
+
+.plain-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.step-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Shopping list
+   -------------------------------------------------------------------------- */
+
+.shopping-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.shopping-group-heading {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shopping-item {
+  padding-block: 4px;
+}
+
+.shopping-item label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+}
+
+/* Ticked-off items fade and strike through — the classic shopping-list
+   affordance, and it makes what's left obvious at a glance. */
+.shopping-item label.is-checked .shopping-amount {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.shopping-amount {
+  color: var(--text-h);
+}
+
+.shopping-notes,
+.shopping-from {
+  font-size: 13px;
+  margin: 2px 0 0 26px;
+}
+
+.instructions-section {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.instruction-block {
+  margin-bottom: 24px;
+}
+
+.instruction-block h3 {
+  color: var(--text-h);
+  margin: 0 0 8px;
 }

@@ -42,6 +42,19 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
+		<!--
+			Jackson is the library that converts Java objects to and from JSON.
+
+			In Spring Boot 3 and earlier this came bundled inside the web starter, which
+			is why most tutorials never mention it. Boot 4 unbundled it so that apps
+			serving no JSON don't carry it, which means WE have to ask for it explicitly.
+			Without this dependency, a @RestController returning a DTO has no way to turn
+			it into a response body.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jackson</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.postgresql</groupId>
